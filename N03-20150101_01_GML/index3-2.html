@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/topojson.v0.min.js"></script>
+<style type="text/css">
+h1 {
+    font-size: 16px;
+}
+svg {
+    border: 1px solid #aaaaaa;
+}
+.subunit-boundary {
+  fill: none;
+  stroke: #777;
+  stroke-dasharray: 2,2;
+  stroke-linejoin: round;
+}
+.cityname-label {
+    fill-opacity: .5;
+    font-size: 8px;
+    font-weight: 300;     
+    text-anchor: middle;
+    display: none;
+}
+</style>
+<title>hokkaido map</title>
+</head>
+<body>
+<h1>hokkaido city map</h1>
+<div id="map"></div>
+
+<script type="text/javascript">
+    
+    // file読み込み制御用
+    var readTopofileDone = false;
+    var readAttrfileDone = false;
+    // filedata格納変数
+    var topodata;
+    var attrdata;
+    
+    var map_width = 500;
+    var map_height = 650;
+    var svg;
+    
+    function readTopofile(json) {
+        topodata = json;
+        readTopofileDone = true;
+    }
+    function readAttrfile(json) {
+        attrdata = json;
+        readAttrfileDone = true;
+    }
+    
+    d3.json("hokkaido_topo_out2.json", function(error, json) {
+        if(error) return console.warn(error);
+            readTopofile(json);
+            if (readTopofileDone && readAttrfileDone) {
+                main(topodata, attrdata);
+            }
+        });
+    
+    d3.json("hokkaido_codes.json", function(error, json) {
+        if(error) return console.warn(error);
+            readAttrfile(json);
+            if (readTopofileDone && readAttrfileDone) {
+                main(topodata, attrdata);
+            }
+        });
+    
+    function main(topo, attr) {
+        
+        var labelLineHight = 16;
+        // 属性情報を入れ直すためのHash Table
+        var attrHash = new Object();
+        
+        // attr情報を、IDをkeyとするhash-tableに変換する
+        // idをKeyとしたhashテーブル＆property毎のhashテーブルを作成する
+        attr.forEach(function(e){
+            attrHash[e.cityid]=e;
+        });
+        
+         // svgを追加
+        svg = d3.select("body #map").append("svg")
+                .attr("width", map_width)
+                .attr("height", map_height);
+                
+        // 横浜市のmapを描画する
+        var hokkaido = topojson.object(topo, topo.objects.hokkaido);
+        console.log(hokkaido);
+        
+        // 横浜市を中心に指定したメルカトル図法で10万分の1で描画する
+        var projection = d3.geo.mercator()
+                .center([139.59,35.45])
+                .scale(100000)
+                .translate([map_width / 2, map_height / 2]);
+        
+        // pathを作成する
+        var path = d3.geo.path().projection(projection);
+        svg.append("path")
+          .datum(hokkaido)
+          .attr("d", path);
+        
+        // 色を塗る
+        svg.selectAll("path").attr("fill", "#bee59e");
+        
+        // 内部境界に線を引く
+        svg.append("path")
+           .datum(topojson.mesh(topo, topo.objects.hokkaido, function(a, b) { return a !== b; }))
+           .attr("d", path)
+           .attr("class", "subunit-boundary");
+        
+        // 区コードのラベル貼り
+        var city_labels = new Array();
+        svg.selectAll(".cityname-label")
+            .data(hokkaido.geometries)
+          .enter()
+            .append("text")
+                .attr("class", function(d) {
+                    if(!(city_labels.indexOf(d.properties.N03_004) > -1)) {
+                        city_labels.push(d.properties.N03_004);
+                    }
+                    return "cityname-label "+d.properties.N03_004; /* class名にidを付与 */
+                    })
+                .attr("transform", function(d) {
+                    return "translate(" + path.centroid(d) + ")";
+                })
+                .attr("dy", ".35em")
+                .text(function(d) {
+                    return attrHash[d.properties.N03_004].N03_004;
+                });
+        
+        // 各最初のエリアのみラベルを表示する
+        for (var i in city_labels) {
+            svg.select(".cityname-label."+city_labels[i]).style("display", "block");
+        }
+        
+    }
+</script>
+</body>
+</html>
